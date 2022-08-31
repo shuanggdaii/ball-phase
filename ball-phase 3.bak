@@ -1,0 +1,196 @@
+;; The first three lines of this file were inserted by DrRacket. They record metadata
+;; about the language level of this file in a form that our tools can easily process.
+#reader(lib "htdp-beginner-reader.ss" "lang")((modname |ball-phase 4|) (read-case-sensitive #t) (teachpacks ()) (htdp-settings #(#t constructor repeating-decimal #f #t none #f () #t)))
+(require 2htdp/image)
+(require 2htdp/universe)
+
+;; Constantes:
+(define WIDTH 400)
+(define HEIGHT 600)
+(define RADIUS 15)
+(define COLOR "white")
+(define BALL (circle RADIUS "solid" COLOR))
+(define BG (rectangle WIDTH HEIGHT "solid" "black"))
+(define TDISTANCE RADIUS)
+(define BDISTANCE (- HEIGHT RADIUS))
+(define LDISTANCE RADIUS)
+(define RDISTANCE (- WIDTH RADIUS))
+(define X-VELOCITY (random 41))
+(define Y-VELOCITY (random 21))
+(define BOARD (rectangle 80 10 "solid" COLOR))
+
+#;
+(define BG (place-image
+            BOARD
+            (/ WIDTH 2)
+            (* HEIGHT 4/5)
+            (rectangle WIDTH HEIGHT "solid" "black")))
+
+;;===
+;; Data definitions:
+(define-struct ball (x y vx vy))
+;; Ball is (make-ball Number Number X-VELOCITY Y-VELOCITY)
+;; interp. (make-ball (x y vx vy)) is BALL's x and y coordinate,
+;;                                 x-coord moving velocity, and
+;;                                 x-coord moving velocity
+
+(define B1 (make-ball 10 20 20 5))
+(define B2 (make-ball (/ WIDTH 2) (/ HEIGHT 2) 10 2))
+
+;; template rules used:
+;; compound 4 fields
+#;
+(define (fn-for-ball b)
+  (... (ball-x b)
+       (ball-y b)
+       (ball-vx b)
+       (ball-vy b)))
+
+
+;;ListOfBall is one of:
+;; - empty
+;; - (cons Ball ListOfBall)
+;; interp. a list of ball
+
+(define LOB0 empty)
+(define LOB1 (cons B1 empty))
+(define LOB2 (cons B2 (cons B1 empty)))
+
+;; template rules used:
+;; one of (2 cases)
+;; atomic-distinct: empty
+;; compound: (cons Ball ListOfBall)
+;; reference rule: (first lob) is Ball
+;; self-reference: (rest lob)is ListOfBall
+
+#;
+(define (fn-for-lob lob)
+  (cond [(empty? lob) (...)]
+        [else
+         (... (fn-for-ball (first los))
+              (fn-for-lob (rest los)))]))
+
+
+;;====
+;; Functions:
+
+;; start with (main empty)
+;; no testing for main
+
+(define (main lob)
+  (big-bang lob
+            ;(state true)
+            (on-tick next-balls)   ;ListOfBall->ListOfBall
+            (to-draw render-balls) ;Ball->Image
+            (on-mouse add-ball)    ;ListOfBall MouseEvent -> ListOfBall
+            (on-key handle-key)))  ;ListOfBall KeyEvent -> ListOfBall
+
+;ListOfBall->ListOfBall
+;;output the next ListOfBall
+(define (next-balls lob)
+  (cond [(empty? lob) empty]
+        [else
+         (cons (next-ball (first lob))
+               (next-balls (rest lob)))]))
+
+;;Ball->Ball
+;;output the next Ball
+(define (next-ball b)
+  (cond [(collide-top b) (flip-top b)]
+        [(collide-bottom b) (flip-bottom b)]
+        [(collide-left b) (flip-left b)]
+        [(collide-right b) (flip-right b)]
+        [else
+         (simple-move b)]))
+
+;;Ball->Boolean
+;;output if the ball touches the edge distance
+(check-expect (collide-top (make-ball 20 5 X-VELOCITY 5))
+              true)
+(check-expect (collide-top (make-ball 20 15 X-VELOCITY 15))
+              false)
+(define (collide-top b)
+  (if (< (+ (ball-y b) (ball-vy b)) TDISTANCE)
+      true
+      false))
+
+(check-expect (collide-bottom (make-ball 20 599 X-VELOCITY 15))
+              true)
+(check-expect (collide-bottom (make-ball 20 400 X-VELOCITY -15))
+              false)
+(define (collide-bottom b)
+  (if (> (+ (ball-y b) (ball-vy b)) BDISTANCE)
+      true
+      false))
+
+(define (collide-left b)
+  (if (< (+ (ball-x b) (ball-vx b)) LDISTANCE)
+      true
+      false))
+
+(define (collide-right b)
+  (if (> (+ (ball-x b) (ball-vx b)) RDISTANCE)
+      true
+      false))
+
+;;output the next ball
+(define (flip-top b)
+      (make-ball (- (ball-x b) (ball-vx b))
+                 (ball-y b)
+                 (ball-vx b)
+                 (* -1 (ball-vy b))))
+
+(define (flip-bottom b)
+  (make-ball (- (ball-x b) (ball-vx b))
+             (ball-y b)
+             (ball-vx b)
+             (* -1 (ball-vy b))))
+
+(define (flip-left b)
+  (make-ball (- (ball-x b) (ball-vx b))
+             (ball-y b)
+             (* -1 (ball-vx b))
+             (ball-vy b)))
+
+(define (flip-right b)
+  (make-ball (- (ball-x b) (ball-vx b))
+             (ball-y b)
+             (* -1 (ball-vx b))
+             (ball-vy b)))
+
+(define (simple-move b)
+  (make-ball (+ (ball-x b) (ball-vx b))
+             (+ (ball-y b) (ball-vy b))
+             (ball-vx b)
+             (ball-vy b)))
+
+
+;;ListOfBall->Image
+;;paint the BALL onto the BG
+(define (render-balls lob)
+  (cond [(empty? lob) BG]
+        [else
+         (render-ball (first lob)
+                      (render-balls (rest lob)))]))
+  
+;;Ball->Image
+;;paint the BALL onto the BG
+(define (render-ball b img)
+  (place-image BALL (ball-x b) (ball-y b) img))
+
+;;ListOfBall MouseEvent -> ListOfBall
+(define (add-ball lob x-coord y-coord me)
+  (cond [(mouse=? me "button-down") (cons (make-ball x-coord
+                                                     y-coord
+                                                     (- 10 X-VELOCITY)
+                                                     (- 10 Y-VELOCITY))
+                                          lob)]
+        [else lob]))
+
+;;ListOfBall KeyEvent -> ListOfBall
+(define (handle-key lob ke)
+  (cond [(key=? ke " ") empty]
+        [else lob]))
+
+
+(main empty)
